@@ -1,0 +1,21 @@
+Comece pelo arquivo "guia_passo_a_passo_projeto.md" (fora desta pasta,
+enviado junto no chat). Ele explica, na ordem certa, quando rodar cada
+arquivo desta pasta.
+
+Resumo rapidissimo:
+1. python criar_estrutura.py         (ja rodado - so recria se precisar)
+2. pip install -r requirements.txt
+3. python scripts\python\01_download_public_data.py
+4. baixar os 4 arquivos manuais (ver READMEs em data\raw\manual\*)
+5. preencher data\raw\manual\hbfei_x2_x3\template_x2_x3.csv
+6. python scripts\python\02_import_manual_data.py
+7. python scripts\python\03_harmonize_countries.py
+8. python scripts\python\04_build_panel.py
+9. python scripts\python\05_build_hbfei.py
+10. Rscript scripts\r\00_install_packages.R   (uma unica vez)
+11. Rscript scripts\r\06_imputation.R
+12. Rscript scripts\r\07_primary_models.R
+13. Rscript scripts\r\08_sensitivity_models.R
+14. python scripts\python\09_generate_outputs.py
+
+Ou simplesmente rode "run_pipeline.bat" depois dos passos 2, 4 e 5.

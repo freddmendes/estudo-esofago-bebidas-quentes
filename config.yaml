@@ -1,0 +1,60 @@
+# =========================================================
+# config.yaml — configuracao central do projeto
+# Mude os valores aqui em vez de mexer dentro dos scripts.
+# =========================================================
+
+periodo:
+  ano_inicio: 2010
+  ano_fim: 2023          # ajuste para o ultimo ano disponivel no GBD quando for rodar
+
+caminhos:
+  raw_api: "data/raw/api"
+  raw_manual: "data/raw/manual"
+  intermediate: "data/intermediate"
+  processed: "data/processed"
+  outputs: "outputs"
+
+# ---------------------------------------------------------
+# Indicadores do World Bank (API publica, sem chave)
+# codigos oficiais e estaveis do WDI
+# ---------------------------------------------------------
+world_bank_indicadores:
+  pib_per_capita: "NY.GDP.PCAP.CD"
+  urbanizacao_pct: "SP.URB.TOTL.IN.ZS"
+  expectativa_vida: "SP.DYN.LE00.IN"
+  alfabetizacao_adultos_pct: "SE.ADT.LITR.ZS"
+
+# ---------------------------------------------------------
+# FAOSTAT (API publica, sem chave)
+# dominio "FBS" = Food Balances (2010 em diante)
+# os CODIGOS de item (cha, cafe, mate) sao descobertos
+# automaticamente pelo script 01, buscando por estas palavras-chave
+# ---------------------------------------------------------
+faostat:
+  dominio: "FBS"
+  elemento_busca: "Food supply quantity (kg/capita/yr)"
+  itens_busca:
+    - "Tea"
+    - "Coffee"
+    - "Mate"
+
+# ---------------------------------------------------------
+# WHO GHO (API publica, sem chave)
+# Os codigos de indicador do GHO sao numerosos e mudam de nome.
+# O script 01 primeiro BUSCA candidatos pelas palavras-chave abaixo
+# e salva um CSV para voce conferir. Depois de conferir, cole os
+# codigos corretos em "codigos_confirmados" e rode de novo.
+# ---------------------------------------------------------
+who_gho:
+  palavras_chave_busca:
+    tabagismo: "tobacco use"
+    alcool: "alcohol"
+    imc: "mean body mass index"
+    cobertura_saude: "UHC service coverage index"
+  codigos_confirmados: {}   # preencher depois de revisar o CSV gerado
+
+# ---------------------------------------------------------
+# Paises minimos por criterio de exclusao (Secao 13 do protocolo)
+# ---------------------------------------------------------
+criterios_exclusao:
+  populacao_minima: 100000
