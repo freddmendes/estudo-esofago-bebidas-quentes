@@ -11,6 +11,7 @@ Como rodar (cmd, na raiz do projeto):
 Gera: data/processed/painel_pais_ano.csv
 """
 
+import unicodedata
 from pathlib import Path
 
 import pandas as pd
@@ -18,6 +19,47 @@ import pandas as pd
 BASE_DIR = Path(__file__).resolve().parents[2]
 INTER_DIR = BASE_DIR / "data" / "intermediate"
 PROC_DIR = BASE_DIR / "data" / "processed"
+
+# ------------------------------------------------------------------
+# O GBD Results Tool exporta os textos (causa/medida/metrica/faixa
+# etaria) no idioma do navegador de quem baixou — pode vir em ingles
+# ("Esophageal cancer", "Rate", "Deaths") ou em portugues ("Cancer de
+# esofago", "Taxa", "Obitos"). As funcoes abaixo reconhecem os dois,
+# ignorando acentuacao, para o filtro nao depender do idioma de quem
+# baixou o arquivo.
+# ------------------------------------------------------------------
+def normalizar_texto(texto) -> str:
+    if not isinstance(texto, str):
+        return ""
+    texto = unicodedata.normalize("NFKD", texto)
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    return texto.lower()
+
+
+def contem_alguma_palavra(serie: pd.Series, palavras: list) -> pd.Series:
+    normalizado = serie.astype(str).apply(normalizar_texto)
+    return normalizado.apply(lambda t: any(p in t for p in palavras))
+
+
+PALAVRAS_ESOFAGO = ["esophageal", "esofago"]
+PALAVRAS_TAXA = ["rate", "taxa"]
+PALAVRAS_PADRONIZADA = ["standardiz", "padronizada"]
+
+# nomes canonicos (sempre em ingles) para as colunas finais do painel,
+# independente do idioma em que o GBD foi baixado
+MAPA_MEDIDAS = {
+    "incidencia": "incidence", "incidence": "incidence",
+    "obitos": "deaths", "deaths": "deaths", "mortality": "deaths", "mortalidade": "deaths",
+    "dalys": "dalys",
+    "ylls": "ylls",
+    "ylds": "ylds",
+    "prevalencia": "prevalence", "prevalence": "prevalence",
+}
+
+
+def mapear_medida(nome) -> str:
+    chave = normalizar_texto(nome)
+    return MAPA_MEDIDAS.get(chave, chave.replace(" ", "_"))
 
 
 def carregar_desfecho_gbd() -> pd.DataFrame:
@@ -36,17 +78,26 @@ def carregar_desfecho_gbd() -> pd.DataFrame:
         return pd.DataFrame()
 
     df = pd.read_csv(caminho, low_memory=False)
-    df = df[df["causa"].astype(str).str.contains("Esophageal", case=False, na=False)]
-    df = df[df["metrica"].astype(str).str.contains("Rate", case=False, na=False)]
-    if "faixa_etaria" in df.columns:
-        df = df[df["faixa_etaria"].astype(str).str.contains("standardiz", case=False, na=False)]
 
-    # uma coluna por medida (incidencia/mortalidade/dalys/ylls/ylds)
+    df = df[contem_alguma_palavra(df["causa"], PALAVRAS_ESOFAGO)]
+    df = df[contem_alguma_palavra(df["metrica"], PALAVRAS_TAXA)]
+    if "faixa_etaria" in df.columns:
+        df = df[contem_alguma_palavra(df["faixa_etaria"], PALAVRAS_PADRONIZADA)]
+
+    if df.empty:
+        print("  [aviso] nenhuma linha sobrou apos os filtros de causa/metrica/faixa etaria.")
+        print("  Abra data/intermediate/gbd_padronizado_iso3.csv e confira os valores reais")
+        print("  das colunas 'causa', 'metrica' e 'faixa_etaria' (podem ter vindo em outro")
+        print("  idioma que este script ainda nao reconhece — me avise qual apareceu).")
+        return pd.DataFrame()
+
+    df["medida_padrao"] = df["medida"].apply(mapear_medida)
+
+    # uma coluna por medida (incidence/deaths/dalys/ylls/ylds), sempre com nome em ingles
     pivot = df.pivot_table(
-        index=["iso3", "ano"], columns="medida", values="valor", aggfunc="mean"
+        index=["iso3", "ano"], columns="medida_padrao", values="valor", aggfunc="mean"
     ).reset_index()
-    pivot.columns = [c if c in ("iso3", "ano") else f"asr_{str(c).lower().replace(' ', '_')}"
-                     for c in pivot.columns]
+    pivot.columns = [c if c in ("iso3", "ano") else f"asr_{c}" for c in pivot.columns]
     return pivot
 
 
