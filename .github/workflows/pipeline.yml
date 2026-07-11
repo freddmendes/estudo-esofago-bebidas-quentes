@@ -1,0 +1,90 @@
+name: Pipeline Estudo Esofago
+
+# Como disparar:
+#   - Manualmente: aba "Actions" do repositorio -> "Pipeline Estudo Esofago" -> "Run workflow"
+#   - Automaticamente: sempre que voce enviar (commit) uma mudanca em
+#     data/raw/manual/** (novos arquivos baixados) ou em config.yaml
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'data/raw/manual/**'
+      - 'config.yaml'
+
+permissions:
+  contents: write   # necessario para o passo final gravar os resultados de volta no repositorio
+
+jobs:
+  rodar-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias Python
+        run: pip install -r requirements.txt
+
+      - name: Configurar R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - name: Instalar bibliotecas de sistema (pacotes espaciais)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libudunits2-dev libgdal-dev libgeos-dev libproj-dev
+
+      - name: Instalar pacotes R
+        run: Rscript scripts/r/00_install_packages.R
+
+      - name: "[1/9] Baixar dados publicos via API"
+        run: python scripts/python/01_download_public_data.py
+
+      - name: "[2/9] Importar dados manuais (GBD, GLOBOCAN, CI5, Vignat)"
+        run: python scripts/python/02_import_manual_data.py
+
+      - name: "[3/9] Harmonizar codigos de pais (ISO3)"
+        run: python scripts/python/03_harmonize_countries.py
+
+      - name: "[4/9] Construir o painel pais-ano"
+        run: python scripts/python/04_build_panel.py
+
+      - name: "[5/9] Construir o HBFEI (PCA)"
+        run: python scripts/python/05_build_hbfei.py
+
+      - name: "[6/9] Imputacao multipla (MICE)"
+        run: Rscript scripts/r/06_imputation.R
+
+      - name: "[7/9] Modelos estatisticos primarios"
+        run: Rscript scripts/r/07_primary_models.R
+
+      - name: "[8/9] Analises de sensibilidade"
+        run: Rscript scripts/r/08_sensitivity_models.R
+
+      - name: "[9/9] Gerar tabelas e figuras finais"
+        run: python scripts/python/09_generate_outputs.py
+
+      - name: Disponibilizar resultados para download (aba Actions -> Artifacts)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-pipeline
+          path: |
+            outputs/
+            data/processed/
+          if-no-files-found: warn
+
+      - name: Gravar resultados de volta no repositorio
+        if: always()
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/processed outputs
+          git commit -m "Atualiza resultados do pipeline [automatico]" || echo "Nada novo para gravar"
+          git push
