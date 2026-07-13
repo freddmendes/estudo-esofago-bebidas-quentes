@@ -1,12 +1,12 @@
-iso3,pais,x2_proporcao_muito_quente,x2_fonte,x2_metodo_afericao,x3_classificacao_0_2,x3_fonte,revisor,data_revisao
-IRN,Ira,,Pourshams et al. 2005 / Golestan Cohort,copo-proxy,,IARC Monograph 116,,
-MWI,Malawi,,ESCCAPE consortium,escore composto,,IARC Monograph 116,,
-TZA,Tanzania,,ESCCAPE consortium,escore composto,,IARC Monograph 116,,
-KEN,Quenia,,ESCCAPE consortium,escore composto,,IARC Monograph 116,,
-CHN,China,,estudos caso-controle regionais,tempo de espera,,IARC Monograph 116,,
-URY,Uruguai,,,,,,,
-ARG,Argentina,,,,,,,
-PRY,Paraguai,,,,,,,
-BRA,Brasil (regiao Sul),,,,,,,
-TUR,Turquia,,,,,,,
-MNG,Mongolia,,,,,,,
+iso3,pais,x2_proporcao_muito_quente,x2_fonte,x2_metodo_afericaox3_classificacao_0_2,x3_fonte,revisor,data_revisao
+IRN,Ira,0.22,Islami et al. 2009,autorrelato categorizado,2,IARC Monograph 116,Mendes A,2026-07-13
+MWI,Malawi,0.70,ESCCAPE consortium,escore composto,2,IARC Monograph 116,Mendes A,2026-07-13
+TZA,Tanzania,0.24,Masukume et al. 2022,escore composto,2,IARC Monograph 116,Mendes A,2026-07-13
+KEN,Quenia,0.58,Middleton et al. 2019,autorrelato categorizado,2,IARC Monograph 116,Mendes A,2026-07-13
+CHN,China,0.042,Yu et al. 2018 (Appendix Table 1),autorrelato,2,IARC Monograph 116,Mendes A,2026-07-13
+URY,Uruguai,,Castellsagué et al. 2000,caso-controle hospitalar,2,IARC Monograph 116,Mendes A,2026-07-13
+ARG,Argentina,,Castellsagué et al. 2000,caso-controle hospitalar,2,IARC Monograph 116,Mendes A,2026-07-13
+PRY,Paraguai,,Rolon et al. 1995,caso-controle hospitalar,2,IARC Monograph 116,Mendes A,2026-07-13
+BRA,Brasil (regiao Sul),,Castellsagué et al. 2000,caso-controle hospitalar,2,IARC Monograph 116,Mendes A,2026-07-13
+TUR,Turquia,,Onuk et al. 2002,descritivo regional,2,IARC Monograph 116,Mendes A,2026-07-13
+MNG,Mongolia,,,,1,IARC Monograph 116,Mendes A,2026-07-13
