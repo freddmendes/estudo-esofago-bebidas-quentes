@@ -80,12 +80,12 @@ jobs:
             data/processed/
           if-no-files-found: warn
 
-     - name: Gravar resultados de volta no repositorio
-        if: always()
-        run: |
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          mkdir -p data/processed outputs/tables outputs/figures
-          git add data/processed outputs
-          git commit -m "Atualiza resultados do pipeline [automatico]" || echo "Nada novo para gravar"
-          git push
+       - name: Gravar resultados de volta no repositorio
+          if: always()
+          run: |
+            git config --local user.name "github-actions[bot]"
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            mkdir -p data/processed outputs/tables outputs/figures
+            git add data/processed outputs
+            git commit -m "Atualiza resultados do pipeline [automatico]" || echo "Nada novo para gravar"
+            git push
