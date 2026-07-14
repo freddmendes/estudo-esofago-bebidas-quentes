@@ -10,12 +10,13 @@ dados de:
 Como rodar (cmd, na raiz do projeto):
     python scripts\\python\\01_download_public_data.py
 
-Nao precisa de nenhuma chave de API. Todas as fontes aqui sao publicas.
+Este script isola falhas por fonte: se o FAOSTAT ou o WHO GHO estiverem
+temporariamente fora do ar, isso NAO impede as outras fontes de rodar —
+cada uma roda dentro do seu proprio bloco de protecao, e o script sempre
+chega ao fim, avisando no final quais fontes falharam.
 """
 
-import sys
 import time
-import json
 from pathlib import Path
 
 import requests
@@ -30,6 +31,27 @@ SESSION = requests.Session()
 SESSION.headers.update({"User-Agent": "pesquisa-academica-unip-sorocaba/1.0"})
 
 
+def get_com_retentativa(url: str, tentativas: int = 3, espera_segundos: int = 8, **kwargs):
+    """
+    Faz um GET com retentativas automaticas. Servidores publicos (FAOSTAT,
+    WHO GHO) as vezes ficam temporariamente fora do ar (erro 5xx) — isso
+    nao e um bug do nosso codigo, e uma instabilidade do lado deles.
+    """
+    ultimo_erro = None
+    for tentativa in range(1, tentativas + 1):
+        try:
+            resp = SESSION.get(url, **kwargs)
+            resp.raise_for_status()
+            return resp
+        except requests.exceptions.RequestException as e:
+            ultimo_erro = e
+            print(f"    [tentativa {tentativa}/{tentativas} falhou: {e}]")
+            if tentativa < tentativas:
+                print(f"    aguardando {espera_segundos}s antes de tentar de novo...")
+                time.sleep(espera_segundos)
+    raise ultimo_erro
+
+
 def carregar_config():
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
@@ -39,13 +61,11 @@ def carregar_config():
 # WORLD BANK
 # ============================================================
 def baixar_world_bank(indicador_codigo: str, ano_ini: int, ano_fim: int) -> pd.DataFrame:
-    """Baixa uma serie de indicador do World Bank para todos os paises."""
     url = (
         f"https://api.worldbank.org/v2/country/all/indicator/{indicador_codigo}"
         f"?format=json&date={ano_ini}:{ano_fim}&per_page=20000"
     )
-    resp = SESSION.get(url, timeout=60)
-    resp.raise_for_status()
+    resp = get_com_retentativa(url, timeout=60)
     payload = resp.json()
 
     if not isinstance(payload, list) or len(payload) < 2 or payload[1] is None:
@@ -74,11 +94,15 @@ def rodar_world_bank(cfg: dict):
     todos = []
     for nome, codigo in indicadores.items():
         print(f"  baixando {nome} ({codigo}) ...")
-        df = baixar_world_bank(codigo, ano_ini, ano_fim)
+        try:
+            df = baixar_world_bank(codigo, ano_ini, ano_fim)
+        except Exception as e:
+            print(f"  [erro] falhou o indicador {nome}: {e}")
+            continue
         if not df.empty:
             df["nome_indicador"] = nome
             todos.append(df)
-        time.sleep(0.5)  # gentileza com o servidor
+        time.sleep(0.5)
 
     if todos:
         painel = pd.concat(todos, ignore_index=True)
@@ -96,10 +120,8 @@ FAOSTAT_BASE = "https://fenixservices.fao.org/faostat/api/v1/en"
 
 
 def buscar_itens_faostat(dominio: str, palavra_chave: str) -> pd.DataFrame:
-    """Procura codigos de item do FAOSTAT que contenham a palavra-chave."""
     url = f"{FAOSTAT_BASE}/definitions/types/item?datasource={dominio}"
-    resp = SESSION.get(url, timeout=60)
-    resp.raise_for_status()
+    resp = get_com_retentativa(url, timeout=60)
     dados = resp.json().get("data", [])
     df = pd.DataFrame(dados)
     if df.empty:
@@ -111,8 +133,7 @@ def buscar_itens_faostat(dominio: str, palavra_chave: str) -> pd.DataFrame:
 
 def buscar_elementos_faostat(dominio: str, palavra_chave: str) -> pd.DataFrame:
     url = f"{FAOSTAT_BASE}/definitions/types/element?datasource={dominio}"
-    resp = SESSION.get(url, timeout=60)
-    resp.raise_for_status()
+    resp = get_com_retentativa(url, timeout=60)
     dados = resp.json().get("data", [])
     df = pd.DataFrame(dados)
     if df.empty:
@@ -132,8 +153,7 @@ def baixar_faostat(dominio: str, item_codes: list, element_codes: list, ano_ini:
         f"&year={anos}&show_codes=true&show_unit=true&show_flags=false"
         f"&null_values=false&output_type=csv"
     )
-    resp = SESSION.get(url, timeout=120)
-    resp.raise_for_status()
+    resp = get_com_retentativa(url, timeout=120)
     from io import StringIO
     return pd.read_csv(StringIO(resp.text))
 
@@ -145,7 +165,12 @@ def rodar_faostat(cfg: dict):
     ano_fim = cfg["periodo"]["ano_fim"]
 
     print(f"  buscando elemento '{cfg['faostat']['elemento_busca']}' ...")
-    elementos_df = buscar_elementos_faostat(dominio, "Food supply quantity")
+    try:
+        elementos_df = buscar_elementos_faostat(dominio, "Food supply quantity")
+    except Exception as e:
+        print(f"  [erro] FAOSTAT indisponivel no momento ({e}) — pulando esta fonte.")
+        print(f"  Rode o pipeline de novo mais tarde para tentar so o FAOSTAT.")
+        return
     if elementos_df.empty:
         print("  [erro] nao encontrei o elemento no FAOSTAT — confira manualmente em:")
         print(f"  {FAOSTAT_BASE}/definitions/types/element?datasource={dominio}")
@@ -157,7 +182,11 @@ def rodar_faostat(cfg: dict):
     itens_encontrados = []
     for palavra in cfg["faostat"]["itens_busca"]:
         print(f"  buscando item '{palavra}' ...")
-        itens_df = buscar_itens_faostat(dominio, palavra)
+        try:
+            itens_df = buscar_itens_faostat(dominio, palavra)
+        except Exception as e:
+            print(f"    [erro] falhou a busca de '{palavra}': {e}")
+            continue
         if itens_df.empty:
             print(f"    [aviso] nenhum item encontrado para '{palavra}'")
             continue
@@ -169,7 +198,6 @@ def rodar_faostat(cfg: dict):
         print("  [erro] nenhum item encontrado — abortando FAOSTAT")
         return
 
-    # salva o que foi encontrado para auditoria/conferencia
     if itens_encontrados:
         pd.concat(itens_encontrados, ignore_index=True).to_csv(
             RAW_API_DIR / "faostat_itens_encontrados.csv", index=False
@@ -180,7 +208,6 @@ def rodar_faostat(cfg: dict):
         df = baixar_faostat(dominio, item_codes, element_codes, ano_ini, ano_fim)
     except Exception as e:
         print(f"  [erro] falha ao baixar FAOSTAT: {e}")
-        print(f"  Baixe manualmente em https://www.fao.org/faostat/en/#data/{dominio} como alternativa.")
         return
 
     saida = RAW_API_DIR / "faostat_consumo_cha_cafe_mate.csv"
@@ -196,15 +223,13 @@ GHO_BASE = "https://ghoapi.azureedge.net/api"
 
 def buscar_indicadores_gho(palavra_chave: str) -> pd.DataFrame:
     url = f"{GHO_BASE}/Indicator?$filter=contains(IndicatorName,'{palavra_chave}')"
-    resp = SESSION.get(url, timeout=60)
-    resp.raise_for_status()
+    resp = get_com_retentativa(url, timeout=60)
     return pd.DataFrame(resp.json().get("value", []))
 
 
 def baixar_indicador_gho(codigo: str) -> pd.DataFrame:
     url = f"{GHO_BASE}/{codigo}"
-    resp = SESSION.get(url, timeout=120)
-    resp.raise_for_status()
+    resp = get_com_retentativa(url, timeout=120)
     return pd.DataFrame(resp.json().get("value", []))
 
 
@@ -214,7 +239,6 @@ def rodar_who_gho(cfg: dict):
 
     if not confirmados:
         print("  Nenhum codigo confirmado em config.yaml ainda.")
-        print("  Vou BUSCAR candidatos pelas palavras-chave e salvar um CSV para voce escolher.")
         candidatos = []
         for tema, palavra in cfg["who_gho"]["palavras_chave_busca"].items():
             print(f"  buscando candidatos para '{tema}' ({palavra}) ...")
@@ -233,11 +257,8 @@ def rodar_who_gho(cfg: dict):
             saida = RAW_API_DIR / "who_gho_candidatos_indicadores.csv"
             resultado.to_csv(saida, index=False, encoding="utf-8")
             print(f"\n  Candidatos salvos em: {saida}")
-            print("  ABRA esse arquivo, escolha o IndicatorCode certo para cada tema,")
-            print("  cole em config.yaml -> who_gho.codigos_confirmados e rode este")
-            print("  script de novo para baixar os dados de fato.")
         else:
-            print("  [erro] nenhum candidato encontrado — confira sua internet ou as palavras-chave")
+            print("  [erro] nenhum candidato encontrado")
         return
 
     print("  codigos confirmados encontrados em config.yaml, baixando dados ...")
@@ -268,11 +289,33 @@ def main():
     RAW_API_DIR.mkdir(parents=True, exist_ok=True)
     cfg = carregar_config()
 
-    rodar_world_bank(cfg)
-    rodar_faostat(cfg)
-    rodar_who_gho(cfg)
+    fontes_com_erro = []
 
-    print("\nConcluido. Confira os arquivos em data/raw/api/")
+    try:
+        rodar_world_bank(cfg)
+    except Exception as e:
+        print(f"\n[erro] World Bank falhou por completo: {e}")
+        fontes_com_erro.append("World Bank")
+
+    try:
+        rodar_faostat(cfg)
+    except Exception as e:
+        print(f"\n[erro] FAOSTAT falhou por completo: {e}")
+        fontes_com_erro.append("FAOSTAT")
+
+    try:
+        rodar_who_gho(cfg)
+    except Exception as e:
+        print(f"\n[erro] WHO GHO falhou por completo: {e}")
+        fontes_com_erro.append("WHO GHO")
+
+    print("\n" + "=" * 50)
+    if fontes_com_erro:
+        print(f"Concluido COM AVISOS. Fontes que falharam: {', '.join(fontes_com_erro)}")
+        print("Rode o script de novo mais tarde para tentar essas fontes de novo.")
+    else:
+        print("Concluido com sucesso em todas as fontes.")
+    print("Confira os arquivos em data/raw/api/")
 
 
 if __name__ == "__main__":
