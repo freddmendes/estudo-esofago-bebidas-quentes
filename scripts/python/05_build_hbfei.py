@@ -35,15 +35,66 @@ def carregar_painel() -> pd.DataFrame:
     return pd.read_csv(caminho, low_memory=False)
 
 
+def _ler_csv_com_delimitador_flexivel(caminho: Path) -> pd.DataFrame:
+    """
+    Le o CSV tentando descobrir o delimitador sozinho. E comum, ao editar
+    uma planilha colada de outro lugar (Excel em pt-BR, Google Sheets,
+    editor web do GitHub), o arquivo sair com ';' em vez de ',' — ou com
+    espacos extras nos nomes das colunas. Esta funcao tenta lidar com
+    isso automaticamente em vez de travar o pipeline inteiro.
+    """
+    df = pd.read_csv(caminho, sep=None, engine="python")
+    df.columns = [c.strip() for c in df.columns]
+    return df
+
+
+def _achar_coluna(df: pd.DataFrame, pistas: list) -> str | None:
+    """Acha uma coluna cujo nome contenha TODAS as pistas (case-insensitive)."""
+    for col in df.columns:
+        nome = col.lower().replace(" ", "").replace("-", "_")
+        if all(pista in nome for pista in pistas):
+            return col
+    return None
+
+
 def carregar_x2_x3() -> pd.DataFrame:
     caminho = MANUAL_DIR / "template_x2_x3.csv"
-    df = pd.read_csv(caminho)
+    df = _ler_csv_com_delimitador_flexivel(caminho)
+
+    col_iso3 = _achar_coluna(df, ["iso3"])
+    col_x2 = _achar_coluna(df, ["x2", "proporcao"])
+    col_x3 = _achar_coluna(df, ["x3", "classific"])
+
+    faltando = [nome for nome, col in
+                [("iso3", col_iso3), ("x2_proporcao_muito_quente", col_x2), ("x3_classificacao_0_2", col_x3)]
+                if col is None]
+    if faltando:
+        print(f"  [erro] nao encontrei as colunas {faltando} em template_x2_x3.csv")
+        print(f"  Colunas que EXISTEM no arquivo agora: {list(df.columns)}")
+        print("  Confira se o cabecalho da planilha nao foi alterado sem querer ao editar")
+        print("  no navegador (nomes de coluna devem bater com o template original).")
+        raise KeyError(f"colunas faltando em template_x2_x3.csv: {faltando}")
+
+    df = df.rename(columns={
+        col_iso3: "iso3",
+        col_x2: "x2_proporcao_muito_quente",
+        col_x3: "x3_classificacao_0_2",
+    })
+
+    # converte para numero; valores nao numericos (texto solto, "GAP" etc.) viram NaN
+    # em vez de quebrar o script
+    df["x2_proporcao_muito_quente"] = pd.to_numeric(df["x2_proporcao_muito_quente"], errors="coerce")
+    df["x3_classificacao_0_2"] = pd.to_numeric(df["x3_classificacao_0_2"], errors="coerce")
+
     preenchidos = df.dropna(subset=["x2_proporcao_muito_quente", "x3_classificacao_0_2"], how="all")
     if preenchidos.empty:
         print("  [aviso] a planilha template_x2_x3.csv ainda esta vazia (sem X2/X3 preenchidos).")
         print("  O HBFEI sera calculado so com X1 (FAOSTAT) ate voce preencher essa planilha —")
         print("  isso e uma limitacao REAL do indice, nao um bug: X2/X3 exigem revisao de")
         print("  literatura (Secao 10.1 do protocolo), nao podem ser inventados.")
+    else:
+        print(f"  {len(preenchidos)} pais(es) com X2 e/ou X3 preenchido(s).")
+
     return df[["iso3", "x2_proporcao_muito_quente", "x3_classificacao_0_2"]]
 
 
