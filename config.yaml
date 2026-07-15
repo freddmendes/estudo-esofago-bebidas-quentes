@@ -32,6 +32,7 @@ world_bank_indicadores:
 # ---------------------------------------------------------
 faostat:
   dominio: "FBS"
+  arquivo_manual: "data/raw/manual/faostat_manual.csv"
   elemento_busca: "Food supply quantity (kg/capita/yr)"
   itens_busca:
     - "Tea"
