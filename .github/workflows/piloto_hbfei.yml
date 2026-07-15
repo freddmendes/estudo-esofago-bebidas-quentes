@@ -1,0 +1,49 @@
+name: Piloto HBFEI - Etapas 1 a 5
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  piloto-hbfei:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar o repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias Python
+        run: pip install -r requirements.txt
+
+      - name: "[1/5] Preparar dados publicos e FAOSTAT manual"
+        run: python scripts/python/01_download_public_data.py
+
+      - name: "[2/5] Importar dados manuais"
+        run: python scripts/python/02_import_manual_data.py
+
+      - name: "[3/5] Harmonizar paises"
+        run: python scripts/python/03_harmonize_countries.py
+
+      - name: "[4/5] Construir painel pais-ano"
+        run: python scripts/python/04_build_panel.py
+
+      - name: "[5/5] Construir HBFEI piloto"
+        run: python scripts/python/05_build_hbfei.py
+
+      - name: Disponibilizar resultados piloto
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-piloto-hbfei
+          path: |
+            data/processed/painel_pais_ano.csv
+            data/processed/painel_pais_ano_com_hbfei.csv
+            data/processed/hbfei_pca_diagnostico.csv
+          if-no-files-found: warn
